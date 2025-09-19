@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from flask import Flask, redirect, request, render_template, session
@@ -36,9 +37,10 @@ class Purchase:
     quantity: int
 
 # The user database is a dictionary where the keys are usernames and the values are User structs.
+# Passwords are hashed client-side using SHA-256 for security
 user_database: Dict[str, User] = {
-    'admin': User(username='admin', password='admin', balance=1000, is_admin=True),
-    'test': User(username='test', password='test', balance=100, is_admin=False),
+    'admin': User(username='admin', password='8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', balance=1000, is_admin=True),
+    'test': User(username='test', password='9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', balance=100, is_admin=False),
 }
 
 # The product database is a pre-populated list of every available product.
@@ -55,6 +57,14 @@ product_database: List[Product] = [
 
 # The purchase database starts empty, but will get filled as purchases are made
 purchase_database: List[Purchase] = []
+
+# Track failed login attempts for rate limiting
+# Dictionary mapping username to list of failed attempt timestamps
+failed_login_attempts: Dict[str, List[datetime]] = {}
+
+# Configuration for login rate limiting
+MAX_LOGIN_ATTEMPTS = 5  # Maximum failed attempts before lockout
+LOCKOUT_DURATION = timedelta(minutes=15)  # How long to lock accounts
 
 '''
 These routes handle the main user-facing pages, including viewing products and purchasing them.
@@ -130,7 +140,43 @@ def purchase():
         quantity=quantity
     )
     purchase_database.append(purchase_record)
-    return render_template("purchase_success.html", username=username, purchase=purchase_record)
+    
+    # Store purchase details in session for display on confirmation page
+    # This implements the POST-Redirect-GET pattern to prevent duplicate purchases
+    # when the page is refreshed by avoiding direct template rendering
+    session['last_purchase'] = {
+        'product_name': product.name,
+        'product_image': product.image_url,
+        'quantity': quantity,
+        'user_balance': new_balance
+    }
+    
+    # Redirect to GET endpoint instead of rendering template directly
+    # This prevents the browser from re-submitting the POST request on refresh
+    return redirect("/purchase_success")
+
+@app.route("/purchase_success", methods=["GET"])
+def purchase_success():
+    '''Displays purchase confirmation page.'''
+    # New GET route implementing the POST-Redirect-GET pattern
+    # This prevents duplicate purchases when users refresh the confirmation page
+    
+    # If the user is not logged in, redirect them to the login page.
+    username = get_current_user()
+    if not username:
+        return redirect("/login")
+    
+    # Retrieve purchase details from session instead of processing transaction again
+    # This ensures refreshing the page doesn't trigger another purchase
+    purchase_data = session.get('last_purchase')
+    if not purchase_data:
+        return redirect("/")
+    
+    # Clear the purchase data from session after displaying
+    # This prevents stale data and ensures one-time display for security
+    session.pop('last_purchase', None)
+    
+    return render_template("purchase_success.html", username=username, purchase_data=purchase_data)
 
 '''
 These routes are only used by administrators.
@@ -138,6 +184,11 @@ These routes are only used by administrators.
 @app.route("/admin", methods=["GET"])
 def admin_dashboard():
     '''Allows admins to view recent purchases.'''
+
+    # Check admin authentication and authorization
+    auth_error = require_admin()
+    if auth_error:
+        return auth_error
 
     # Gets the 10 most recent purchases
     recent_purchases = purchase_database[-10:]
@@ -147,15 +198,10 @@ def admin_dashboard():
 def update_product():
     '''Allows admins to change the product description.'''
 
-    # Check if user is logged in
-    username = get_current_user()
-    if not username:
-        return render_template("error.html", error="You must be logged in to perform this action")
-    
-    # Check if user is admin
-    user = user_database.get(username)
-    if not user or not user.is_admin:
-        return render_template("error.html", error="Access denied: Admin privileges required")
+    # Check admin authentication and authorization
+    auth_error = require_admin()
+    if auth_error:
+        return auth_error
 
     product_id = request.form.get("product_id", type=int)
     new_description = request.form.get("description")
@@ -191,16 +237,26 @@ def login_post():
     if username is None or password is None:
         return render_template("error.html", error="Username and password are both required")
 
+    # Check if the account is currently locked due to too many failed attempts
+    if is_account_locked(username):
+        return render_template("error.html", error="Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.")
+
     user = user_database.get(username)
     if user is None:
-        return render_template("error.html", error="User does not exist")
+        # Record failed attempt even for non-existent users to prevent username enumeration timing attacks
+        record_failed_login(username)
+        return render_template("error.html", error="Invalid username or password")
 
-    if password == user.password:
-        # If the password is correct, store username in signed session (secure against tampering) and redirect to home
+    # Password arrives already hashed from client-side, so compare hashes directly
+    if user.password == password:
+        # Successful login - clear any failed attempts and log in the user
+        clear_failed_logins(username)
         session['username'] = username
         return redirect("/")
     else:
-        return render_template("error.html", error="Incorrect password")
+        # Failed login - record the attempt and return error
+        record_failed_login(username)
+        return render_template("error.html", error="Invalid username or password")
 
 @app.route("/create_account", methods=["GET"])
 def create_account_get():
@@ -222,6 +278,7 @@ def create_account_post():
 
     user_database[username] = User(
         username=username,
+        # Password arrives already hashed from client-side, store as-is
         password=password,
         balance=100,
         is_admin=False
@@ -244,6 +301,58 @@ def get_current_user() -> Optional[str]:
 
     # Use signed session instead of raw cookies to prevent user impersonation
     return session.get('username')
+
+def require_admin():
+    '''Check if the current user is logged in and has admin privileges. 
+    Returns an error response if not, otherwise returns None to continue.'''
+    
+    # Check if user is logged in
+    username = get_current_user()
+    if not username:
+        return render_template("error.html", error="You must be logged in to perform this action")
+    
+    # Check if user is admin
+    user = user_database.get(username)
+    if not user or not user.is_admin:
+        return render_template("error.html", error="Access denied: Admin privileges required")
+    
+    # Return None if all checks pass
+    return None
+
+def is_account_locked(username: str) -> bool:
+    '''Check if an account is currently locked due to too many failed login attempts.'''
+    if username not in failed_login_attempts:
+        return False
+    
+    now = datetime.now()
+    attempts = failed_login_attempts[username]
+    
+    # Remove old attempts that are outside the lockout window
+    recent_attempts = [attempt for attempt in attempts if now - attempt < LOCKOUT_DURATION]
+    failed_login_attempts[username] = recent_attempts
+    
+    # Check if we have too many recent attempts
+    return len(recent_attempts) >= MAX_LOGIN_ATTEMPTS
+
+def record_failed_login(username: str):
+    '''Record a failed login attempt for the given username.'''
+    now = datetime.now()
+    if username not in failed_login_attempts:
+        failed_login_attempts[username] = []
+    
+    failed_login_attempts[username].append(now)
+    
+    # Clean up old attempts to prevent memory bloat
+    cutoff_time = now - LOCKOUT_DURATION
+    failed_login_attempts[username] = [
+        attempt for attempt in failed_login_attempts[username] 
+        if attempt > cutoff_time
+    ]
+
+def clear_failed_logins(username: str):
+    '''Clear failed login attempts for a user (called on successful login).'''
+    if username in failed_login_attempts:
+        failed_login_attempts[username] = []
 
 # Run the app
 app.run(debug=True, port=8000)

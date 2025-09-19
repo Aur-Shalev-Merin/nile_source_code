@@ -6,11 +6,17 @@
     <div>
         <h1>Purchase successful!</h1>
         <p>
-            <img src="/static/images/{{ purchase.product.image_url }}" width="30%">
+            <!-- Using session-based data structure to prevent duplicate purchase processing -->
+            <!-- Changed from purchase.product.image_url to purchase_data.product_image -->
+            <img src="/static/images/{{ purchase_data.product_image }}" width="30%">
         </p>
         <hgroup>
-            <h2>{{ purchase.quantity }}x {{ purchase.product.name }}</h2>
-            <h3>Remaining balance: ${{ purchase.user.balance }}</h3>
+            <!-- Template variables updated to work with session-based data structure -->
+            <!-- This prevents reprocessing purchase data on page refresh -->
+            <h2>{{ purchase_data.quantity }}x {{ purchase_data.product_name }}</h2>
+            <!-- Using cached balance from session instead of live user data -->
+            <!-- This maintains display consistency and prevents refresh issues -->
+            <h3>Remaining balance: ${{ purchase_data.user_balance }}</h3>
         </hgroup>
         <a href="/">Back</a>
     </div>

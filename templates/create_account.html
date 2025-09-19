@@ -4,18 +4,54 @@
 <div class="grid">
     <div></div>
     <div>
-        <form action="/create_account" method="POST">
+        <form action="/create_account" method="POST" id="createAccountForm">
             <label class="label">Username</label>
-            <input name="username" class="input" type="text" placeholder="Username">
+            <input name="username" class="input" type="text" placeholder="Username" required>
 
             <label class="label">Password</label>
-            <input name="password" class="input" type="password" placeholder="Password">
+            <input name="password" class="input" type="password" placeholder="Password" id="passwordField" required>
 
-            <input type="submit" class="button" value="Create Account"></input>
+            <input type="submit" class="button" value="Create Account">
             Already have an account? <a href="/login">Log in</a>
         </form>
     </div>
     <div>
     </div>
 </div>
+
+<script>
+document.getElementById('createAccountForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const username = document.querySelector('input[name="username"]').value;
+    const password = document.getElementById('passwordField').value;
+    
+    // Hash the password client-side using SHA-256
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashedPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Create a new form with the hashed password
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/create_account';
+    
+    const usernameInput = document.createElement('input');
+    usernameInput.type = 'hidden';
+    usernameInput.name = 'username';
+    usernameInput.value = username;
+    
+    const passwordInput = document.createElement('input');
+    passwordInput.type = 'hidden';
+    passwordInput.name = 'password';
+    passwordInput.value = hashedPassword;
+    
+    form.appendChild(usernameInput);
+    form.appendChild(passwordInput);
+    document.body.appendChild(form);
+    form.submit();
+});
+</script>
 {% endblock %}
