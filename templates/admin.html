@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block main %}
+<h1 class="title">Admin Dashboard (Internal only, DO NOT SHARE!)</h1>
+
+<div class="box">
+  <h2 class="subtitle">Recent purchases:</h2>
+  <ul>
+    {% for purchase in purchases %}
+    <li>User <b>{{ purchase.user.username }}</b> purchased {{ purchase.quantity }}x {{ purchase.product.name }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block main %}
+<h2>Welcome, {{ username }}</h2>
+<h3>Your balance: ${{ balance }}</h3>
+
+<div class="product-display">
+    {% for product in products %}
+    <article>
+        <a href="/product/{{ product.product_id }}">
+            <img src="/static/images/{{ product.image_url }}" width="256px">
+            <hgroup>
+                <h4>{{ product.name }}</h4>
+                <h3><sup>$</sup>{{ product.price }}</h3>
+            </hgroup>
+        </a>
+    </article>
+    {% endfor %}
+</div>
+{% endblock %}

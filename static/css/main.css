@@ -1,0 +1,9 @@
+.product-display {
+    flex-wrap: wrap;
+    display: flex;
+    gap: 8px;
+}
+
+.product-display article {
+    border-radius: 0.25rem;
+}

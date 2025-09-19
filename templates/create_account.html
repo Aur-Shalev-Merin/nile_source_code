@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block main %}
+<div class="grid">
+    <div></div>
+    <div>
+        <form action="/create_account" method="POST">
+            <label class="label">Username</label>
+            <input name="username" class="input" type="text" placeholder="Username">
+
+            <label class="label">Password</label>
+            <input name="password" class="input" type="password" placeholder="Password">
+
+            <input type="submit" class="button" value="Create Account"></input>
+            Already have an account? <a href="/login">Log in</a>
+        </form>
+    </div>
+    <div>
+    </div>
+</div>
+{% endblock %}

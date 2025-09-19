@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block main %}
+<div class="grid">
+    <div></div>
+    <div>
+        <img src="/static/images/{{ product.image_url }}" width="30%">
+        <h2>{{ product.name }}</h2>
+        <h3>{{ product.description }}</h3>
+        <form action="/purchase" method="post">
+            <input name="product_id" type="hidden" value="{{ product.product_id }}">
+            <input name="price" type="hidden" value="{{ product.price }}">
+
+            <label for="quantity">Quantity</label>
+            <input name="quantity" type="number" value="1" min="1">
+            <input type="submit" value="Purchase">
+        </form>
+        {% if admin %}
+        <form action="/update_product" method="post">
+            <input name="product_id" type="hidden" value="{{ product.product_id }}">
+            <label for="description">Update product description (Admin only):</label>
+            <textarea name="description" placeholder="New description"></textarea>
+            <input type="submit" value="Update">
+        </form>
+        {% endif %}
+    </div>
+    <div></div>
+</div>
+{% endblock %}
