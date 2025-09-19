@@ -97,12 +97,13 @@ def purchase():
         return redirect("/login")
 
     product_id = request.form.get("product_id", type=int)
-    price = request.form.get("price", type=int)
     quantity = request.form.get("quantity", type=int)
 
-    if product_id is None or price is None or quantity is None:
+    if product_id is None or quantity is None:
         return render_template("error.html", error="Request is missing required fields")
 
+    # Get the actual price from the database instead of trusting form data
+    price = product_database[product_id].price
     new_balance = user_database[username].balance - (price * quantity)
 
     if new_balance < 0:
@@ -134,6 +135,16 @@ def admin_dashboard():
 def update_product():
     '''Allows admins to change the product description.'''
 
+    # Check if user is logged in
+    username = get_current_user()
+    if not username:
+        return render_template("error.html", error="You must be logged in to perform this action")
+    
+    # Check if user is admin
+    user = user_database.get(username)
+    if not user or not user.is_admin:
+        return render_template("error.html", error="Access denied: Admin privileges required")
+
     product_id = request.form.get("product_id", type=int)
     new_description = request.form.get("description")
 
@@ -151,6 +162,8 @@ These routes handle logging in, creating accounts, and determining who is curren
 def login_get():
     '''Return the login page of the website.'''
 
+    # Clear any existing session data to ensure user starts with a clean slate
+    session.pop('username', None)
     return render_template("login.html")
 
 @app.route("/login", methods=["POST"])
