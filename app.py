@@ -1,12 +1,15 @@
 # Imports the Flask library and some other helper libraries.
 from dataclasses import dataclass
 import logging
+import os
 from typing import Dict, List, Optional
 
-from flask import Flask, redirect, request, render_template
+from flask import Flask, redirect, request, render_template, session
 
 # Initializes the Flask web server.
 app = Flask(__name__)
+# Set secret key to enable signed session cookies, preventing users from tampering with session data
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-change-in-production')
 
 '''
 This code sets up the data structures which are used to store all of the information used by the app.
@@ -164,10 +167,9 @@ def login_post():
         return render_template("error.html", error="User does not exist")
 
     if password == user.password:
-        # If the password is correct, set the session cookie and send them back to the home page
-        resp = redirect("/")
-        resp.set_cookie("username", username)
-        return resp
+        # If the password is correct, store username in signed session (secure against tampering) and redirect to home
+        session['username'] = username
+        return redirect("/")
     else:
         return render_template("error.html", error="Incorrect password")
 
@@ -196,27 +198,23 @@ def create_account_post():
         is_admin=False
     )
 
-    # Log in as the newly created user.
-    resp = redirect("/")
-    resp.set_cookie("username", username)
-    return resp
+    # Log in as the newly created user using secure signed session.
+    session['username'] = username
+    return redirect("/")
 
 @app.route("/logout", methods=["GET"])
 def logout():
     '''Logs the user out.'''
 
-    resp = redirect("/")
-    resp.delete_cookie("username")
-    return resp
+    # Remove username from signed session (more secure than deleting raw cookies)
+    session.pop('username', None)
+    return redirect("/")
 
 def get_current_user() -> Optional[str]:
     '''Return the current logged-in user if they exist, otherwise return None.'''
 
-    if "username" in request.cookies:
-        username = request.cookies.get("username")
-        return username
-    else:
-        return None
+    # Use signed session instead of raw cookies to prevent user impersonation
+    return session.get('username')
 
 # Run the app
 app.run(debug=True, port=8000)
