@@ -82,6 +82,10 @@ def product(product_id: int):
     if not username:
         return redirect("/login")
 
+    # Validate that the product_id exists in the database
+    if product_id < 0 or product_id >= len(product_database):
+        return render_template("error.html", error="Product not found")
+
     user = user_database[username]
     product = product_database[product_id]
 
@@ -101,9 +105,17 @@ def purchase():
 
     if product_id is None or quantity is None:
         return render_template("error.html", error="Request is missing required fields")
+    
+    if quantity <= 0:
+        return render_template("error.html", error="Quantity must be a positive number")
 
-    # Get the actual price from the database instead of trusting form data
-    price = product_database[product_id].price
+    # Validate that the product_id exists in the database
+    if product_id < 0 or product_id >= len(product_database):
+        return render_template("error.html", error="Invalid product")
+
+    # Get all product information from the database instead of trusting any form data
+    product = product_database[product_id]
+    price = product.price
     new_balance = user_database[username].balance - (price * quantity)
 
     if new_balance < 0:
@@ -150,6 +162,10 @@ def update_product():
 
     if product_id is None or new_description is None:
         return render_template("error.html", error="Request is missing required fields")
+
+    # Validate that the product_id exists in the database
+    if product_id < 0 or product_id >= len(product_database):
+        return render_template("error.html", error="Invalid product")
 
     product_database[product_id].description = new_description
 

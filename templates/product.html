@@ -9,7 +9,6 @@
         <h3>{{ product.description }}</h3>
         <form action="/purchase" method="post">
             <input name="product_id" type="hidden" value="{{ product.product_id }}">
-            <input name="price" type="hidden" value="{{ product.price }}">
 
             <label for="quantity">Quantity</label>
             <input name="quantity" type="number" value="1" min="1">
